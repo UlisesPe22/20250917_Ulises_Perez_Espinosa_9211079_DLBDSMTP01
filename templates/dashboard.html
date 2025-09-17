@@ -1,0 +1,285 @@
+<!-- templates/dashboard.html -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hive Anomaly Dashboard</title>
+    <style>
+      /* Simple laptop-focused layout */
+      :root{
+        --bg: #0f1724;
+        --card: #0b1220;
+        --muted: #9aa4b2;
+        --accent: #7c3aed;
+      }
+      body{
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+        background: linear-gradient(180deg,#051022 0%, #071028 100%);
+        color: #e6eef8;
+        margin:0;
+        padding:24px;
+      }
+      .container{max-width:1100px; margin:0 auto;}
+      header{display:flex; justify-content:space-between; align-items:center; margin-bottom:18px}
+      h1{font-size:22px; margin:0}
+      .grid{display:grid; grid-template-columns: 1fr 380px; gap:20px}
+      .card{background:var(--card); padding:18px; border-radius:12px; box-shadow: 0 6px 20px rgba(2,6,23,0.6)}
+
+      .big-status{display:flex; align-items:center; gap:14px}
+      .status-pill{padding:8px 14px; border-radius:999px; font-weight:600}
+      .green{background: rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.18)}
+      .red{background: rgba(239,68,68,0.12); color:#ef4444; border:1px solid rgba(239,68,68,0.18)}
+
+      .kv{display:flex; gap:10px; align-items:center; margin-top:12px}
+      .kv dt{color:var(--muted); width:120px}
+      .kv dd{margin:0}
+
+      table{width:100%; border-collapse:collapse; margin-top:12px; font-size:13px}
+      th,td{padding:8px 10px; text-align:left}
+      tr+tr td{border-top:1px solid rgba(255,255,255,0.03)}
+
+      footer{margin-top:18px; color:var(--muted); font-size:13px}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Hive anomaly dashboard </h1>
+        <small id="last-updated">—</small>
+      </header>
+
+      <div class="grid">
+        <div class="card">
+          <div class="big-status">
+            <div>
+              <div style="font-size:12px; color:var(--muted);">Model prediction</div>
+              <div id="prediction-pill" class="status-pill green">Normal</div>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:12px; color:var(--muted);">Real (hive_status)</div>
+              <div id="real-status" style="font-weight:700; font-size:18px">0</div>
+            </div>
+            <div style="width:1px; background:rgba(255,255,255,0.03); height:48px"></div>
+            <div>
+              <div style="font-size:12px; color:var(--muted);">Buffer size</div>
+              <div id="buffer-size" style="font-weight:700; font-size:18px">0</div>
+            </div>
+          </div>
+
+          <dl class="kv">
+            <dt>Hive Temp</dt><dd id="hive-temp">—</dd>
+          </dl>
+          <dl class="kv">
+            <dt>Humidity</dt><dd id="hive-hum">—</dd>
+          </dl>
+          <dl class="kv">
+            <dt>Pressure</dt><dd id="hive-pres">—</dd>
+          </dl>
+
+          <!-- NEW SECTION FOR MEAN & STD -->
+          <div style="margin-top:14px;">
+            <div style="font-size:13px; color:var(--muted); font-weight:bold;">Statistics (Last 20 entries):</div>
+            <dl class="kv">
+              <dt>Temp (Mean ± Std)</dt><dd id="temp-stats">—</dd>
+            </dl>
+            <dl class="kv">
+              <dt>Humidity (Mean ± Std)</dt><dd id="hum-stats">—</dd>
+            </dl>
+            <dl class="kv">
+              <dt>Pressure (Mean ± Std)</dt><dd id="pres-stats">—</dd>
+            </dl>
+          </div>
+          <!-- END NEW SECTION -->
+
+          <div id="note" style="margin-top:14px; color:var(--muted); font-size:13px">The model marks <strong>Normal</strong> when the queen is producing honey. Red indicates an anomaly (queen not producing).</div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div style="font-weight:700">Recent entries</div>
+            <div style="font-size:13px; color:var(--muted)">Last 20</div>
+          </div>
+
+          <table id="history-table">
+            <thead>
+              <tr><th>Time</th><th>Temp</th><th>Hum</th><th>Pres</th><th>Real</th></tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+
+          <footer>Auto-refreshes every 2s • Laptop layout</footer>
+        </div>
+      </div>
+    </div>
+
+<script>
+  const ANOMALY_INDEX = 1;
+  const THRESHOLD = 0.5;
+
+  function pct(n){
+    return Math.round(n * 100) + '%';
+  }
+  
+  function parsePrediction(pred){
+    if (pred === null || pred === undefined) return { p_anomaly: null, label: null };
+    if (Array.isArray(pred) && pred.length > ANOMALY_INDEX) {
+      const p = Number(pred[ANOMALY_INDEX]);
+      if (!Number.isFinite(p)) return { p_anomaly: null, label: null };
+      return { p_anomaly: p, label: p > THRESHOLD ? 'Anomaly' : 'Normal' };
+    }
+    if (typeof pred === 'number') {
+      if (pred >= 0 && pred <= 1) {
+        const p = pred;
+        return { p_anomaly: p, label: p > THRESHOLD ? 'Anomaly' : 'Normal' };
+      }
+      if (Number.isInteger(pred)) {
+        return { p_anomaly: pred === 1 ? 1.0 : 0.0, label: pred === 1 ? 'Anomaly' : 'Normal' };
+      }
+    }
+    if (typeof pred === 'string') {
+      const low = pred.toLowerCase();
+      if (low === 'anomaly' || low === '1' || low === 'true') return { p_anomaly: 1.0, label: 'Anomaly' };
+      if (low === 'normal' || low === '0' || low === 'false') return { p_anomaly: 0.0, label: 'Normal' };
+      try {
+        const parsed = JSON.parse(pred);
+        return parsePrediction(parsed);
+      } catch (e) {
+        return { p_anomaly: null, label: pred };
+      }
+    }
+    if (typeof pred === 'object') {
+      if (Array.isArray(pred.probabilities) && pred.probabilities.length > ANOMALY_INDEX) {
+        const p = Number(pred.probabilities[ANOMALY_INDEX]);
+        if (Number.isFinite(p)) return { p_anomaly: p, label: p > THRESHOLD ? 'Anomaly' : 'Normal' };
+      }
+      const keys = Object.keys(pred);
+      const lower = keys.map(k => k.toLowerCase());
+      if (lower.includes('anomaly')) {
+        const key = keys[lower.indexOf('anomaly')];
+        const p = Number(pred[key]);
+        if (Number.isFinite(p)) return { p_anomaly: p, label: p > THRESHOLD ? 'Anomaly' : 'Normal' };
+      }
+      if (keys.includes('1')) {
+        const p = Number(pred['1']);
+        if (Number.isFinite(p)) return { p_anomaly: p, label: p > THRESHOLD ? 'Anomaly' : 'Normal' };
+      }
+    }
+    return { p_anomaly: null, label: null };
+  }
+
+  function calculateStats(values) {
+    if (values.length === 0) return {mean: null, std: null};
+    const mean = values.reduce((a,b) => a+b, 0) / values.length;
+    const variance = values.reduce((a,b) => a + Math.pow(b-mean, 2), 0) / values.length;
+    return {mean, std: Math.sqrt(variance)};
+  }
+
+  async function fetchLatest() {
+    try {
+      const res = await fetch('/api/hive/latest');
+      if (!res.ok) throw new Error('no data');
+      const j = await res.json();
+      const payload = j.payload || {};
+      const rawPred = j.prediction;
+
+      const parsed = parsePrediction(rawPred);
+      const p = parsed.p_anomaly;
+      const label = parsed.label;
+
+      const pill = document.getElementById('prediction-pill');
+
+      if (p === null) {
+        if (label) {
+          pill.textContent = label;
+          pill.className = 'status-pill ' + (label.toLowerCase().startsWith('n') ? 'green' : 'red');
+        } else {
+          pill.textContent = 'No prediction';
+          pill.className = 'status-pill';
+        }
+        const conf = document.getElementById('prediction-confidence');
+        if (conf) conf.remove();
+      } else {
+        pill.textContent = `${label} • ${pct(p)}`;
+        pill.className = 'status-pill ' + (p > THRESHOLD ? 'red' : 'green');
+
+        let conf = document.getElementById('prediction-confidence');
+        if (!conf) {
+          conf = document.createElement('div');
+          conf.id = 'prediction-confidence';
+          conf.style.marginTop = '8px';
+          conf.style.height = '8px';
+          conf.style.background = 'rgba(255,255,255,0.06)';
+          conf.style.borderRadius = '6px';
+          const inner = document.createElement('div');
+          inner.id = 'prediction-confidence-inner';
+          inner.style.height = '100%';
+          inner.style.borderRadius = '6px';
+          inner.style.transition = 'width 300ms ease';
+          conf.appendChild(inner);
+          pill.parentNode.parentNode.appendChild(conf);
+        }
+        const inner = document.getElementById('prediction-confidence-inner');
+        if (inner) {
+          inner.style.width = Math.round(p * 100) + '%';
+          inner.style.background = p > THRESHOLD ? 'rgba(239,68,68,0.9)' : 'rgba(16,185,129,0.9)';
+        }
+      }
+
+      document.getElementById('real-status').textContent = (payload.hive_status !== undefined && payload.hive_status !== null) ? payload.hive_status : '—';
+      document.getElementById('buffer-size').textContent = j.buffer_size ?? '—';
+      document.getElementById('hive-temp').textContent =
+        payload.hive_temp !== undefined && payload.hive_temp !== null ? `${payload.hive_temp} °C` : '—';
+
+      document.getElementById('hive-hum').textContent =
+        payload.hive_humidity !== undefined && payload.hive_humidity !== null ? `${payload.hive_humidity} % RH` : '—';
+
+      document.getElementById('hive-pres').textContent =
+        payload.hive_pressure !== undefined && payload.hive_pressure !== null ? `${payload.hive_pressure} hPa` : '—';
+
+      document.getElementById('last-updated').textContent = 'Updated: ' + (payload.time ?? new Date().toISOString());
+
+      const hres = await fetch('/api/hive/history?n=20');
+      if (hres.ok) {
+        const hj = await hres.json();
+        const rows = hj.history || [];
+        const tbody = document.querySelector('#history-table tbody');
+        tbody.innerHTML = '';
+        const temps = [], hums = [], press = [];
+        for (const r of rows.slice().reverse()) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${r.time ?? ''}</td><td>${r.hive_temp ?? ''}</td><td>${r.hive_humidity ?? ''}</td><td>${r.hive_pressure ?? ''}</td><td>${r.hive_status ?? ''}</td>`;
+
+          tbody.appendChild(tr);
+
+          if (r.hive_temp !== null && r.hive_temp !== undefined) temps.push(Number(r.hive_temp));
+          if (r.hive_humidity !== null && r.hive_humidity !== undefined) hums.push(Number(r.hive_humidity));
+          if (r.hive_pressure !== null && r.hive_pressure !== undefined) press.push(Number(r.hive_pressure));
+        }
+
+        const tempStats = calculateStats(temps);
+        const humStats = calculateStats(hums);
+        const presStats = calculateStats(press);
+
+        document.getElementById('temp-stats').textContent =
+          tempStats.mean !== null ? `${tempStats.mean.toFixed(2)} ± ${tempStats.std.toFixed(2)} °C` : '—';
+
+        document.getElementById('hum-stats').textContent =
+          humStats.mean !== null ? `${humStats.mean.toFixed(2)} ± ${humStats.std.toFixed(2)} % RH` : '—';
+
+        document.getElementById('pres-stats').textContent =
+          presStats.mean !== null ? `${presStats.mean.toFixed(2)} ± ${presStats.std.toFixed(2)} hPa` : '—';
+                
+      }
+    } catch (e) {
+      console.error('fetchLatest err', e);
+    }
+  }
+
+  fetchLatest();
+  setInterval(fetchLatest, 2000);
+</script>
+
+  </body> 
+</html>
