@@ -12,13 +12,10 @@ import config
 # Defaults
 MODEL_PATH_DEFAULT = os.path.join(os.path.dirname(__file__), "hive_model.h5")  
 WINDOW_SIZE = 10
-# Use underscored names consistently
 SENSOR_COLS_SCALED = ["hive_temp_scaled", "hive_humidity_scaled", "hive_pressure_scaled"]
 EUCLID_LAGS = [3, 5, 10]
 
-# ------------------------------
-# compute scaler params from DB 
-# ------------------------------
+
 FALLBACK_SCALER = {
     "hive_temp": {"min": 15.5, "max": 55.62},
     "hive_humidity": {"min": 7.23, "max": 93.47},
