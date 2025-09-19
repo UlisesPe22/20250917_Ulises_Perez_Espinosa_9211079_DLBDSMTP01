@@ -104,7 +104,6 @@ def main(delay=0.5):
 
 if __name__ == "__main__":
     import sys
-    # Add a --dry-run argument for testing without sending data
     if "--dry-run" in sys.argv:
         print("Dry run mode: No data will be sent to the API.")
         rows = read_rows_from_db(DB_PATH, offset=0, limit=287)
