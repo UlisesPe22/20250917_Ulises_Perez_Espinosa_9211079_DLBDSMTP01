@@ -1,11 +1,9 @@
 import json
 from flask import Blueprint, request, jsonify, current_app, render_template
 from buffer.buffer import BUFFER
-# The prediction that contains the main prediction logic
 from models.predict import predict_from_payload
 bp = Blueprint("api", __name__)
 
-# List of all required fields for an incoming payload
 REQUIRED_FIELDS = [
     "time", "hive_number", "hive_status", "hive_temp", "hive_humidity", "hive_pressure"
 ]
